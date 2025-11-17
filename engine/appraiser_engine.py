@@ -10,36 +10,36 @@ Top-level integration engine that orchestrates:
 - Income approach (external model, assumed available)
 - Cap rate model
 - DSCR loan model
+- Sales comparison model (NEW)
 - Recommendation engine
 
-This module is designed to produce a single structured "Appraisal Report"
-for a subject property in Los Angeles (or elsewhere in CA with similar logic).
+Produces a structured "Appraisal Report" for a subject property.
 
-NOTE:
-This engine assumes that the following modules/classes already exist
-in your repository:
+This engine assumes the following modules already exist:
 
-- services.zillow_parser.ZillowParser
-- services.redfin_parser.RedfinParser
-- services.realtor_parser.RealtorParser
-- services.homesdotcom_parser.HomesDotComParser
-- services.century21_parser.Century21Parser
-- services.loopnet_parser.LoopNetParser
-- services.apartments_parser.ApartmentsParser
+services/
+    zillow_parser.ZillowParser
+    redfin_parser.RedfinParser
+    realtor_parser.RealtorParser
+    homesdotcom_parser.HomesDotComParser
+    century21_parser.Century21Parser
+    loopnet_parser.LoopNetParser
+    apartments_parser.ApartmentsParser
 
-- tools.address_normalizer.AddressNormalizer
-- tools.apn_lookup.APNLookup
-- tools.zoning_lookup.ZoningLookup
-- tools.rental_comp_aggregator.RentalCompAggregator
+tools/
+    address_normalizer.AddressNormalizer
+    apn_lookup.APNLookup
+    zoning_lookup.ZoningLookup
+    rental_comp_aggregator.RentalCompAggregator
 
-- models.income_approach.IncomeApproach           (NOI / income modeling)
-- models.cap_rate_model.CapRateModel
-- models.dscr_loan_model.DSCRLoanModel
-- models.recommendation_engine.RecommendationEngine
-- models.risk_scoring.RiskScoring                  (if implemented)
-- models.value_add_model.ValueAddModel             (if implemented)
-
-You can adjust imports if your actual filenames differ.
+models/
+    income_approach.IncomeApproach
+    cap_rate_model.CapRateModel
+    dscr_loan_model.DSCRLoanModel
+    recommendation_engine.RecommendationEngine
+    sales_comp_model.SalesCompModel          # NEW
+    risk_scoring.RiskScoring (optional)
+    value_add_model.ValueAddModel (optional)
 """
 
 from typing import Dict, Any, Optional, List
@@ -65,52 +65,12 @@ from models.income_approach import IncomeApproach
 from models.cap_rate_model import CapRateModel
 from models.dscr_loan_model import DSCRLoanModel
 from models.recommendation_engine import RecommendationEngine
-# Optional, if present:
-# from models.risk_scoring import RiskScoring
-# from models.value_add_model import ValueAddModel
+from models.sales_comp_model import SalesCompModel  # NEW IMPORT
 
 
 class AppraiserEngine:
     """
     Main orchestration class.
-
-    Usage example (conceptual):
-
-        engine = AppraiserEngine()
-
-        report = engine.run_full_appraisal({
-            "primary_url": "https://www.zillow.com/homedetails/...",
-            "rental_apartments_url": "https://www.apartments.com/...",
-            "apn": "5055-008-012",
-            "assessor_html": "<html>...</html>",   # optional, if copied
-            "zoning_code": "RD1.5-1-TOC",          # or
-            "zimas_html": "<html>...</html>",      # optional
-            "financing": {
-                "interest_rate": 0.0675,
-                "amort_years": 30,
-                "min_dscr": 1.20,
-                "max_ltv": 0.75,
-            },
-            "jurisdiction": {
-                "is_rent_controlled": True,
-                "jurisdiction": "LA City",
-                "submarket_class": "stable"
-            },
-            "manual_rent_comps": [
-                {"beds": 2, "baths": 1, "sqft": 850, "rent": 2400, "source": "manual"},
-            ],
-        })
-
-    The engine returns a structured dict with keys:
-        - success
-        - subject
-        - rental
-        - income
-        - cap_rate
-        - financing
-        - valuation
-        - recommendation
-        - raw_parsed
     """
 
     # ---------------------------------------------------------
@@ -121,34 +81,7 @@ class AppraiserEngine:
         """
         High-level orchestration.
 
-        config keys (all optional except primary_url):
-
-            "primary_url": str                  # Zillow / Redfin / etc.
-            "secondary_urls": List[str]        # future multiparser use
-
-            "rental_apartments_url": str       # Apartments.com URL (optional)
-            "manual_rent_comps": List[dict]    # optional manual comps
-
-            "apn": str                         # APN string (optional)
-            "assessor_html": str               # raw HTML from LA Assessor (optional)
-
-            "zoning_code": str                 # zoning code string (optional)
-            "zimas_html": str                  # raw HTML from ZIMAS (optional)
-
-            "financing": {
-                "interest_rate": float,        # e.g., 0.0675
-                "amort_years": int,            # e.g., 30
-                "min_dscr": float,             # e.g., 1.20
-                "max_ltv": float,              # e.g., 0.75
-            }
-
-            "jurisdiction": {
-                "is_rent_controlled": bool,
-                "jurisdiction": str,           # e.g., "LA City"
-                "submarket_class": str,        # "prime/core/stable/transitional/distressed"
-            }
-
-        Returns a structured appraisal report.
+        Returns a complete appraisal report.
         """
         primary_url = config.get("primary_url")
         if not primary_url:
@@ -166,27 +99,27 @@ class AppraiserEngine:
             zimas_html=config.get("zimas_html"),
         )
 
-        # 3) Rental profile (Apartments.com + manual comps)
+        # 3) Rental profile
         rental_profile = self._build_rental_profile(
             subject_profile=subject_profile,
             apartments_url=config.get("rental_apartments_url"),
             manual_comps=config.get("manual_rent_comps") or [],
         )
 
-        # 4) Income approach (NOI, income summary)
+        # 4) Income approach
         income_profile = self._build_income_profile(
             subject_profile=subject_profile,
             rental_profile=rental_profile,
         )
 
-        # 5) Cap rate (based on property type, submarket, risk)
+        # 5) Cap rate approach
         cap_rate_profile = self._build_cap_rate_profile(
             subject_profile=subject_profile,
             jurisdiction=config.get("jurisdiction") or {},
             income_profile=income_profile,
         )
 
-        # 6) Financing (DSCR loan sizing)
+        # 6) DSCR loan model
         financing_profile = self._build_financing_profile(
             income_profile=income_profile,
             cap_rate_profile=cap_rate_profile,
@@ -194,14 +127,23 @@ class AppraiserEngine:
             financing=config.get("financing") or {},
         )
 
-        # 7) Valuation (as-is & stabilized – if your IncomeApproach/ValueAdd models expose it)
+        # 7) Valuation profile
         valuation_profile = self._build_valuation_profile(
             income_profile=income_profile,
             cap_rate_profile=cap_rate_profile,
             purchase_price=listing_data.get("price"),
         )
 
-        # 8) Recommendation engine (BUY / WATCH / PASS)
+        # 8) Sales Comparison (OPTIONAL)
+        sales_comparison_result = None
+        if "sales_comps" in config:
+            subject_for_comps = subject_profile.get("listing_core", {})
+            sales_comparison_result = self._run_sales_comparison(
+                subject_profile=subject_for_comps,
+                sales_comps=config["sales_comps"],
+            )
+
+        # 9) Recommendation
         recommendation = self._build_recommendation(
             income_profile=income_profile,
             cap_rate_profile=cap_rate_profile,
@@ -210,6 +152,7 @@ class AppraiserEngine:
             jurisdiction=config.get("jurisdiction") or {},
         )
 
+        # Final structured appraisal report
         return {
             "success": True,
             "subject": subject_profile,
@@ -218,6 +161,7 @@ class AppraiserEngine:
             "cap_rate": cap_rate_profile,
             "financing": financing_profile,
             "valuation": valuation_profile,
+            "sales_comparison": sales_comparison_result,   # NEW
             "recommendation": recommendation,
             "raw_parsed": {
                 "listing": listing_data,
@@ -229,12 +173,7 @@ class AppraiserEngine:
     # ---------------------------------------------------------
 
     def _parse_listing(self, url: str) -> Dict[str, Any]:
-        """
-        Routes to the appropriate parser based on domain.
-        """
         domain = urlparse(url).netloc.lower()
-
-        parser = None
 
         if "zillow.com" in domain:
             parser = ZillowParser(url)
@@ -259,7 +198,7 @@ class AppraiserEngine:
             return {"success": False, "error": f"Parser failure: {e}"}
 
     # ---------------------------------------------------------
-    # 2) Subject profile: address, APN, zoning
+    # 2) Subject profile (Address, APN, Zoning)
     # ---------------------------------------------------------
 
     def _build_subject_profile(
@@ -270,18 +209,15 @@ class AppraiserEngine:
         zoning_code: Optional[str],
         zimas_html: Optional[str],
     ) -> Dict[str, Any]:
-        """
-        Builds a unified subject profile dictionary.
-        """
+
         addr_norm_tool = AddressNormalizer()
         apn_tool = APNLookup()
         zoning_tool = ZoningLookup()
 
-        # Address
         address_full = listing_data.get("address_full") or ""
         addr_norm = addr_norm_tool.normalize(address_full)
 
-        # APN & assessor
+        # APN
         apn_result = None
         if apn:
             apn_result = apn_tool.lookup(apn, assessor_html=assessor_html)
@@ -292,7 +228,7 @@ class AppraiserEngine:
             zimas_html=zimas_html,
         )
 
-        subject_profile = {
+        return {
             "address_raw": address_full,
             "address_normalized": addr_norm,
             "apn_info": apn_result,
@@ -311,8 +247,6 @@ class AppraiserEngine:
             },
         }
 
-        return subject_profile
-
     # ---------------------------------------------------------
     # 3) Rental profile
     # ---------------------------------------------------------
@@ -323,44 +257,36 @@ class AppraiserEngine:
         apartments_url: Optional[str],
         manual_comps: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
-        """
-        Builds rental comp profile using Apartments.com + manual comps.
-        """
-        subject_beds = subject_profile["listing_core"].get("beds")
-        subject_baths = subject_profile["listing_core"].get("baths")
-        subject_sqft = subject_profile["listing_core"].get("sqft")
 
+        listing = subject_profile["listing_core"]
         aggregator = RentalCompAggregator(
-            subject_beds=subject_beds,
-            subject_baths=subject_baths,
-            subject_sqft=subject_sqft,
+            subject_beds=listing.get("beds"),
+            subject_baths=listing.get("baths"),
+            subject_sqft=listing.get("sqft"),
         )
 
         apartments_data = None
         if apartments_url:
             try:
-                ap_parser = ApartmentsParser(apartments_url)
-                apartments_data = ap_parser.parse()
+                parser = ApartmentsParser(apartments_url)
+                apartments_data = parser.parse()
                 if apartments_data.get("success"):
                     aggregator.add_comps_from_apartments(apartments_data)
             except Exception:
-                apartments_data = {"success": False, "error": "Failed to parse Apartments.com URL"}
+                apartments_data = {"success": False}
 
-        # Manual comps
         if manual_comps:
             aggregator.add_many_manual_comps(manual_comps)
-
-        rent_summary = aggregator.summary()
 
         return {
             "apartments_url": apartments_url,
             "apartments_data_success": apartments_data.get("success") if apartments_data else None,
             "manual_comp_count": len(manual_comps),
-            "rent_summary": rent_summary,
+            "rent_summary": aggregator.summary(),
         }
 
     # ---------------------------------------------------------
-    # 4) Income profile (NOI, etc.)
+    # 4) Income profile
     # ---------------------------------------------------------
 
     def _build_income_profile(
@@ -368,26 +294,12 @@ class AppraiserEngine:
         subject_profile: Dict[str, Any],
         rental_profile: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """
-        Uses IncomeApproach model to estimate NOI and related metrics.
 
-        This assumes IncomeApproach can accept:
-            - subject data (beds, baths, units, sqft, etc.)
-            - rent summary (recommended_rent)
-        and return a .summary() dict with:
-            - noi
-            - noi_stabilized
-            - expense_ratio
-            - gross_potential_income
-            - etc.
-
-        Adjust the call if your IncomeApproach implementation differs.
-        """
         listing = subject_profile["listing_core"]
         rent_summary = rental_profile["rent_summary"]
         rec_rent = rent_summary["recommended_rent"]["rent_estimate"]
 
-        income_model = IncomeApproach(
+        model = IncomeApproach(
             beds=listing.get("beds"),
             baths=listing.get("baths"),
             num_units=listing.get("num_units") or 1,
@@ -396,9 +308,7 @@ class AppraiserEngine:
             rent_detail=rent_summary,
         )
 
-        income_summary = income_model.summary()
-
-        return income_summary
+        return model.summary()
 
     # ---------------------------------------------------------
     # 5) Cap rate profile
@@ -410,49 +320,41 @@ class AppraiserEngine:
         jurisdiction: Dict[str, Any],
         income_profile: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """
-        Uses CapRateModel to determine base and adjusted cap.
-        """
-        listing = subject_profile["listing_core"]
 
-        # Rough property type classification for cap rate model
+        listing = subject_profile["listing_core"]
         num_units = listing.get("num_units")
-        property_type_raw = (listing.get("property_type_raw") or "").lower()
+        prop_raw = (listing.get("property_type_raw") or "").lower()
 
         if num_units and num_units >= 5:
-            cap_prop_type = "5+"
+            prop_type = "5+"
         elif num_units and 2 <= num_units <= 4:
-            cap_prop_type = "2-4"
-        elif "retail" in property_type_raw:
-            cap_prop_type = "retail"
-        elif "office" in property_type_raw:
-            cap_prop_type = "office"
-        elif "industrial" in property_type_raw:
-            cap_prop_type = "industrial"
-        elif "mixed" in property_type_raw:
-            cap_prop_type = "mixed_use"
+            prop_type = "2-4"
+        elif "retail" in prop_raw:
+            prop_type = "retail"
+        elif "office" in prop_raw:
+            prop_type = "office"
+        elif "industrial" in prop_raw:
+            prop_type = "industrial"
+        elif "mixed" in prop_raw:
+            prop_type = "mixed_use"
         else:
-            cap_prop_type = "sfr"
+            prop_type = "sfr"
 
+        is_rent_ctrl = jurisdiction.get("is_rent_controlled", False)
         submarket_class = jurisdiction.get("submarket_class", "stable")
-        is_rent_controlled = bool(jurisdiction.get("is_rent_controlled"))
-
-        # Optional: if you have a RiskScoring model, you can calculate a risk_score here
         risk_score = jurisdiction.get("risk_score")
 
-        cap_model = CapRateModel(
-            property_type=cap_prop_type,
+        model = CapRateModel(
+            property_type=prop_type,
             submarket_class=submarket_class,
             risk_score=risk_score,
-            is_rent_controlled=is_rent_controlled,
+            is_rent_controlled=is_rent_ctrl,
         )
 
-        cap_summary = cap_model.summary()
-
-        return cap_summary
+        return model.summary()
 
     # ---------------------------------------------------------
-    # 6) Financing / DSCR profile
+    # 6) DSCR financing profile
     # ---------------------------------------------------------
 
     def _build_financing_profile(
@@ -462,32 +364,24 @@ class AppraiserEngine:
         purchase_price: Optional[float],
         financing: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """
-        Uses DSCRLoanModel for loan sizing and DSCR.
-        """
+
         noi = income_profile.get("noi") or income_profile.get("noi_stabilized")
         if not noi or not purchase_price:
             return {
                 "inputs": financing,
-                "note": "Missing NOI or purchase price; DSCR loan sizing not computed.",
+                "note": "Missing NOI or purchase price; DSCR not computed."
             }
 
-        interest_rate = financing.get("interest_rate", 0.0675)
-        amort_years = financing.get("amort_years", 30)
-        min_dscr = financing.get("min_dscr", 1.20)
-        max_ltv = financing.get("max_ltv", 0.75)
-
-        dscr_model = DSCRLoanModel(
+        model = DSCRLoanModel(
             noi=noi,
             purchase_price=purchase_price,
-            interest_rate=interest_rate,
-            amort_years=amort_years,
-            min_dscr=min_dscr,
-            max_ltv=max_ltv,
+            interest_rate=financing.get("interest_rate", 0.0675),
+            amort_years=financing.get("amort_years", 30),
+            min_dscr=financing.get("min_dscr", 1.20),
+            max_ltv=financing.get("max_ltv", 0.75),
         )
 
-        dscr_summary = dscr_model.summary()
-        return dscr_summary
+        return model.summary()
 
     # ---------------------------------------------------------
     # 7) Valuation profile
@@ -499,34 +393,59 @@ class AppraiserEngine:
         cap_rate_profile: Dict[str, Any],
         purchase_price: Optional[float],
     ) -> Dict[str, Any]:
-        """
-        Simple valuation using cap rate model + NOI.
 
-        If you also have a ValueAddModel, you can extend this to include:
-            - stabilized NOI
-            - ARV (after-repositioning value)
-            - equity creation, etc.
-        """
         noi = income_profile.get("noi")
-        noi_stabilized = income_profile.get("noi_stabilized") or noi
+        noi_stab = income_profile.get("noi_stabilized") or noi
         cap_rate = cap_rate_profile.get("final_cap_rate")
 
-        as_is_value = None
-        stabilized_value = None
+        as_is = None
+        stabilized = None
 
         if noi and cap_rate and cap_rate > 0:
-            as_is_value = round(noi / cap_rate, 2)
-        if noi_stabilized and cap_rate and cap_rate > 0:
-            stabilized_value = round(noi_stabilized / cap_rate, 2)
+            as_is = round(noi / cap_rate, 2)
+        if noi_stab and cap_rate and cap_rate > 0:
+            stabilized = round(noi_stab / cap_rate, 2)
 
         return {
             "purchase_price": purchase_price,
-            "as_is_value": as_is_value,
-            "stabilized_value": stabilized_value,
+            "as_is_value": as_is,
+            "stabilized_value": stabilized,
         }
 
     # ---------------------------------------------------------
-    # 8) Recommendation
+    # SALES COMPARISON (NEW)
+    # ---------------------------------------------------------
+
+    def _run_sales_comparison(self, subject_profile: Dict, sales_comps: List[Dict]) -> Dict:
+        """
+        Run the sales comparison model if comps are provided.
+
+        subject_profile should come from:
+            subject_profile["listing_core"]
+        """
+        try:
+            if not subject_profile:
+                return {"success": False, "error": "Missing subject profile"}
+
+            if not sales_comps:
+                return {"success": False, "error": "No comparable sales provided"}
+
+            model = SalesCompModel(
+                subject=subject_profile,
+                comps=sales_comps
+            )
+            summary = model.summary()
+            summary["success"] = True
+            return summary
+
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Sales comparison failed: {str(e)}"
+            }
+
+    # ---------------------------------------------------------
+    # 9) Recommendation assembly
     # ---------------------------------------------------------
 
     def _build_recommendation(
@@ -537,22 +456,14 @@ class AppraiserEngine:
         valuation_profile: Dict[str, Any],
         jurisdiction: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """
-        Calls RecommendationEngine with the key inputs.
-        """
-        # If you implement a RiskScoring model, calculate real risk_score here.
-        risk_score = jurisdiction.get("risk_score")
-        risk_grade = jurisdiction.get("risk_grade")
-
-        cash_on_cash = income_profile.get("cash_on_cash")
 
         recommender = RecommendationEngine(
-            risk_score=risk_score,
-            risk_grade=risk_grade,
+            risk_score=jurisdiction.get("risk_score"),
+            risk_grade=jurisdiction.get("risk_grade"),
             dscr_summary=financing_profile,
             cap_rate_summary=cap_rate_profile,
             valuation_summary=valuation_profile,
-            cash_on_cash=cash_on_cash,
+            cash_on_cash=income_profile.get("cash_on_cash"),
             jurisdiction_flags={
                 "is_rent_controlled": jurisdiction.get("is_rent_controlled", False),
                 "jurisdiction": jurisdiction.get("jurisdiction"),
