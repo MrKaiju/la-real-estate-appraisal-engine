@@ -1,0 +1,31 @@
+{
+  "primary_url": "https://www.zillow.com/homedetails/123-Main-St-Los-Angeles-CA-90016/12345678_zpid/",
+  
+  "rental_apartments_url": "https://www.apartments.com/some-complex-los-angeles-ca/abcd1234/",
+  
+  "manual_rent_comps": [
+    { "beds": 2, "baths": 1, "sqft": 850, "rent": 2400, "source": "manual" },
+    { "beds": 1, "baths": 1, "sqft": 650, "rent": 1950, "source": "manual" }
+  ],
+
+  "apn": "5055-008-012",
+  "assessor_html": null,
+
+  "zoning_code": "RD1.5-1",
+  "zimas_html": null,
+
+  "financing": {
+    "interest_rate": 0.0675,
+    "amort_years": 30,
+    "min_dscr": 1.20,
+    "max_ltv": 0.75
+  },
+
+  "jurisdiction": {
+    "is_rent_controlled": true,
+    "jurisdiction": "LA City",
+    "submarket_class": "stable",
+    "risk_score": 45,
+    "risk_grade": "B"
+  }
+}
