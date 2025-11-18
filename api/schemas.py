@@ -66,5 +66,3 @@ class AppraisalResponse(BaseModel):
     """
     success: bool
     data: Dict[str, Any]
-
-Add FastAPI request/response schemas
