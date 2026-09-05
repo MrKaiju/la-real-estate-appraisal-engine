@@ -17,7 +17,7 @@
 
 **Proprietary layer.** The LA Regulatory Stack (RSO / AB 1482 / ULA / Prop 13 / soft-story / SB 9 / fire-zone insurance) encoded as a dated, cited, unit-tested rules engine, fused with an explicit LA expense stack and FHA lender tests. That fusion is the moat. The math around it (cap rates, DSCR, comps) is table stakes and now works.
 
-**State of play.** Before this branch the engine could not complete a single run (five independent crashes) and all seven listing scrapers were dead against current anti-bot systems. As of this commit the engine runs end to end from structured input with zero network calls, has 29 passing tests, a Dockerfile, CI, and three consumer-facing API endpoints. Section 9 lays out four phases from here to a paid product.
+**State of play.** Before this branch the engine could not complete a single run (five independent crashes) and all seven listing scrapers were dead against current anti-bot systems. As of this commit the engine runs end to end from an address and a price, enriching from LA County, GeoHub, CAL FIRE, RentCast and HUD with per-field provenance, persists deals, and ships with 39 passing tests, a Dockerfile, CI, and a Fly.io deploy pipeline. Section 9 lays out four phases from here to a paid product; Phase 1 is code-complete and waits on credentials and a networked smoke test.
 
 ---
 

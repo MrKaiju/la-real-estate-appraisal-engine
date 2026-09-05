@@ -47,6 +47,7 @@ from models.sales_comp_model import SalesCompModel
 from models.narrative_builder import NarrativeBuilder
 
 from core import la_regulatory
+from core.enrichment import Enricher, sales_comps_from_extras
 from core.house_hack import HouseHackInputs, analyze as analyze_house_hack
 
 from reports.report_generator import build_html_report, build_pdf_report
@@ -63,6 +64,9 @@ SUBJECT_FIELDS = (
 class AppraiserEngine:
     """Main orchestration class coordinating all appraisal components."""
 
+    def __init__(self, enricher: Optional[Enricher] = None):
+        self.enricher = enricher
+
     def run_full_appraisal(self, config: Dict[str, Any]) -> Dict[str, Any]:
         warnings: List[str] = []
 
@@ -70,6 +74,9 @@ class AppraiserEngine:
         listing_data, err = self._intake(config, warnings)
         if err:
             return {"success": False, "error": err, "warnings": warnings}
+
+        # 1b. Enrichment (public GIS + licensed APIs), user input always wins ----
+        enrichment = self._enrich(listing_data, config, warnings)
 
         # 2. Subject profile ------------------------------------------------
         subject_profile = self._build_subject_profile(
@@ -162,6 +169,7 @@ class AppraiserEngine:
             "success": True,
             "engine_version": "0.2.0",
             "subject": subject_profile,
+            "enrichment": enrichment,
             "regulatory": regulatory,
             "rental": rental_profile,
             "income": income_profile,
@@ -217,6 +225,27 @@ class AppraiserEngine:
         if not (subject or listing.get("address_full")):
             return None, "Provide `subject` (structured property facts) or a supported listing URL."
         return listing, None
+
+    def _enrich(self, listing: Dict[str, Any], config: Dict[str, Any], warnings: List[str]) -> Dict[str, Any]:
+        """Mutates `listing` in place with enriched fields; returns provenance/notes/extras."""
+        if config.get("enrich") is False:
+            return {"provenance": {k: "user" for k, v in listing.items() if v is not None},
+                    "notes": ["enrichment disabled by request"], "extras": {}}
+        enricher = self.enricher or Enricher()
+        try:
+            result = enricher.enrich(listing, apn=config.get("apn"))
+        except Exception as e:  # never let enrichment kill the run
+            warnings.append(f"Enrichment failed: {e}")
+            return {"provenance": {}, "notes": [str(e)], "extras": {}}
+        listing.update(result["subject"])
+        if not config.get("sales_comps"):
+            comps = sales_comps_from_extras(result["extras"])
+            if comps:
+                config["sales_comps"] = comps
+                result["notes"].append(f"sales comps: {len(comps)} from RentCast value AVM")
+        for c in (result["extras"].get("conflicts") or []):
+            warnings.append(f"{c['field']}: you entered {c['user']}, {c['source']} says {c['enrichment']}; using yours.")
+        return {"provenance": result["provenance"], "notes": result["notes"], "extras": result["extras"]}
 
     def _parse_listing(self, url: str) -> Dict[str, Any]:
         domain = urlparse(url).netloc.lower()

@@ -25,6 +25,9 @@ class SubjectInput(BaseModel):
     current_rents: Optional[List[float]] = Field(None, description="In-place rent per unit, monthly")
     listed_noi: Optional[float] = None
     listed_cap_rate: Optional[float] = None
+    apn: Optional[str] = Field(None, description="LA County APN, e.g. 5055-008-012; speeds up parcel lookup")
+    lat: Optional[float] = None
+    lon: Optional[float] = None
 
 
 class ManualRentComp(BaseModel):
@@ -99,6 +102,7 @@ class ReportOptions(BaseModel):
 
 class AppraisalRequest(BaseModel):
     subject: Optional[SubjectInput] = None
+    enrich: Optional[bool] = Field(None, description="Set false to skip parcel/GIS/RentCast enrichment")
     primary_url: Optional[str] = Field(None, description="Optional listing URL; structured subject is preferred")
     rental_apartments_url: Optional[str] = None
     manual_rent_comps: Optional[List[ManualRentComp]] = None

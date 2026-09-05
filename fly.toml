@@ -1,0 +1,40 @@
+# Fly.io app definition. First deploy:
+#   fly launch --no-deploy --copy-config --name la-deal-check
+#   fly volumes create data --region lax --size 1
+#   fly secrets set RENTCAST_API_KEY=... HUD_USER_API_TOKEN=... API_KEY=... ALLOWED_ORIGINS=https://yourdomain
+#   fly deploy
+# Postgres later: fly postgres create && fly postgres attach (sets DATABASE_URL automatically).
+
+app = "la-deal-check"
+primary_region = "lax"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8000"
+  LA_ENGINE_ENRICH = "1"
+  LA_ENGINE_CACHE_DIR = "/data/cache"
+  DATABASE_URL = "sqlite:////data/deals.sqlite3"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/health"
+
+[mounts]
+  source = "data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
