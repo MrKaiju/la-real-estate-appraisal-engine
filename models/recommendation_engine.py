@@ -28,7 +28,11 @@ class RecommendationEngine:
         cash_on_cash: Optional[float],
         jurisdiction_flags: Dict[str, Any],
         sales_comparison: Optional[Dict[str, Any]] = None,
+        income_summary: Optional[Dict[str, Any]] = None,
+        regulatory: Optional[Dict[str, Any]] = None,
     ):
+        self.income_summary = income_summary or {}
+        self.regulatory = regulatory or {}
         self.risk_score = risk_score
         self.risk_grade = risk_grade
         self.dscr_summary = dscr_summary
@@ -244,21 +248,38 @@ class RecommendationEngine:
         sales_score_data = self._sales_comparison_score()
         sales_score = sales_score_data.get("score")
 
-        # --- Cap Rate Score ---
-        cap_rate = self.cap_rate_summary.get("final_cap_rate")
-        if cap_rate is not None:
-            if cap_rate >= 0.06:
+        # --- Cap Rate Score: going-in yield (NOI / price) vs market cap for this asset ---
+        market_cap = self.cap_rate_summary.get("final_cap_rate")
+        going_in = self.income_summary.get("going_in_cap_rate")
+        if going_in is not None and market_cap:
+            spread = going_in - market_cap          # positive = buying above market yield (cheap)
+            if spread >= 0.0075:
+                cap_score = 5
+            elif spread >= 0.0025:
                 cap_score = 4
-            elif cap_rate >= 0.05:
+            elif spread >= -0.0025:
                 cap_score = 3
-            else:
+            elif spread >= -0.0100:
                 cap_score = 2
+            else:
+                cap_score = 1
         else:
+            spread = None
             cap_score = None
 
         # --- DSCR Score ---
         dscr_ok = self.dscr_summary.get("meets_min_dscr", False)
-        dscr_score = 4 if dscr_ok else 1
+        dscr_at_ltv = self.dscr_summary.get("dscr_at_max_ltv_loan")
+        if dscr_at_ltv is None:
+            dscr_score = None
+        elif dscr_ok and dscr_at_ltv >= 1.35:
+            dscr_score = 5
+        elif dscr_ok:
+            dscr_score = 4
+        elif dscr_at_ltv >= 1.0:
+            dscr_score = 2
+        else:
+            dscr_score = 1
 
         # --- Cash-on-Cash Score ---
         if self.cash_on_cash is None:
@@ -289,7 +310,13 @@ class RecommendationEngine:
         elif conf_level == "low":
             adjustment = -0.20
 
-        final_score = base_score + adjustment
+        # --- Regulatory adjustment (LA stack): RSO + soft-story + fire zone are real money ---
+        reg_summary = self.regulatory.get("summary") or {}
+        reg_adjust = -0.15 * len(reg_summary.get("risk_flags") or [])
+        reg_adjust += 0.10 * len(reg_summary.get("opportunity_flags") or [])
+        reg_adjust = max(-0.5, min(0.3, reg_adjust))
+
+        final_score = base_score + adjustment + reg_adjust
 
         # --- Final Rating Thresholds (on adjusted score) ---
         if final_score >= 4.2:
@@ -306,8 +333,11 @@ class RecommendationEngine:
             "components": {
                 "sales_comparison": sales_score_data,
                 "cap_rate_score": cap_score,
+                "cap_rate_spread_vs_market": round(spread, 4) if spread is not None else None,
                 "dscr_score": dscr_score,
                 "cash_on_cash_score": coc_score,
+                "regulatory_adjustment": round(reg_adjust, 3),
+                "market_confidence_adjustment": adjustment,
             },
             "market_confidence": market_conf,
             "context": {

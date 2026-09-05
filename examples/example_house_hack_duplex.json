@@ -1,0 +1,14 @@
+{
+  "subject": {
+    "address_full": "5678 Meridian St, Los Angeles, CA 90042",
+    "city": "Los Angeles",
+    "price": 1050000,
+    "beds": 4, "baths": 2, "sqft": 1900, "lot_size": 5400,
+    "year_built": 1948,
+    "property_type": "2-4", "num_units": 2,
+    "zone": "R2-1",
+    "unit_rents": [3100, 2900]
+  },
+  "house_hack": { "loan_program": "fha", "interest_rate": 0.0625, "owner_unit_index": 1, "current_rent_paid": 2950 },
+  "financing": { "interest_rate": 0.0725 }
+}

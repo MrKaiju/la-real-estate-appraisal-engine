@@ -12,7 +12,7 @@ Integrates with:
 """
 
 from typing import Optional, Dict
-from models.income_approach import IncomeApproach
+from models.income_approach import IncomeApproach  # legacy positional interface supported
 
 
 class IncomeScenarios:

@@ -201,6 +201,14 @@ class DSCRLoanModel:
 
         metrics = self.metrics_for_loan(final_loan) if final_loan else None
 
+        # "Meets" = the buyer can borrow the full LTV-max loan and still clear min DSCR.
+        ltv_metrics = self.metrics_for_loan(loan_ltv) if loan_ltv else None
+        meets = bool(ltv_metrics and ltv_metrics["dscr"] is not None and ltv_metrics["dscr"] >= self.min_dscr)
+        # Max price at which the LTV-max loan still clears min DSCR: loan_dscr / max_ltv.
+        max_supported_price = (loan_dscr / self.max_ltv) if (loan_dscr and self.max_ltv) else None
+        binding = "ltv" if (loan_dscr is not None and loan_ltv is not None and loan_ltv <= loan_dscr) else "dscr"
+        equity = (self.purchase_price - final_loan) if final_loan else None
+
         return {
             "inputs": {
                 "noi": self.noi,
@@ -212,9 +220,17 @@ class DSCRLoanModel:
             },
             "loan_by_dscr": round(loan_dscr, 2) if loan_dscr is not None else None,
             "loan_by_ltv": round(loan_ltv, 2) if loan_ltv is not None else None,
+            "binding_constraint": binding,
             "final_loan_amount": metrics["loan_amount"] if metrics else None,
+            "max_loan_amount": metrics["loan_amount"] if metrics else None,
+            "equity_required": round(equity, 2) if equity is not None else None,
             "monthly_payment": metrics["monthly_payment"] if metrics else None,
             "annual_debt_service": metrics["annual_debt_service"] if metrics else None,
             "dscr_at_final_loan": metrics["dscr"] if metrics else None,
+            "dscr_at_max_ltv_loan": ltv_metrics["dscr"] if ltv_metrics else None,
             "ltv_at_final_loan": metrics["ltv"] if metrics else None,
+            "meets_min_dscr": meets,
+            "max_supported_price": round(max_supported_price, 2) if max_supported_price else None,
+            "price_gap_vs_dscr": (round(max_supported_price - self.purchase_price, 2)
+                                  if max_supported_price else None),
         }

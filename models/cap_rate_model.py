@@ -60,58 +60,63 @@ class CapRateModel:
 
     def _base_cap_rate_grid(self) -> Dict[str, Dict[str, float]]:
         """
-        Baseline LA-style cap rate assumptions (approximate ranges).
-        These are midpoints that you can tweak over time.
+        Baseline LA cap rates, calibrated Q2 2026.
+
+        Anchors: Kidder Mathews LA multifamily Q2 2026 average 5.8% (up 30 bps YoY);
+        broker submarket surveys put prime Westside 5+ unit at 4.0-4.75%, core infill
+        4.75-5.5%, South LA / transitional 5.75-6.5%. RSO premium is applied separately.
+        Recalibrate quarterly; see docs/STRATEGY_BLUEPRINT.md for the data pipeline
+        that should eventually replace this grid with transaction-derived values.
         """
         return {
             "sfr": {
-                "prime": 0.035,
-                "core": 0.040,
-                "stable": 0.0425,
-                "transitional": 0.045,
-                "distressed": 0.050,
-            },
-            "2-4": {
                 "prime": 0.0375,
                 "core": 0.0425,
-                "stable": 0.045,
-                "transitional": 0.0475,
-                "distressed": 0.0525,
+                "stable": 0.0450,
+                "transitional": 0.0500,
+                "distressed": 0.0550,
             },
-            "5+": {
-                "prime": 0.040,
-                "core": 0.045,
-                "stable": 0.0475,
-                "transitional": 0.050,
-                "distressed": 0.055,
-            },
-            "mixed_use": {
+            "2-4": {
                 "prime": 0.0425,
                 "core": 0.0475,
-                "stable": 0.050,
-                "transitional": 0.0525,
-                "distressed": 0.0575,
+                "stable": 0.0525,
+                "transitional": 0.0575,
+                "distressed": 0.0625,
+            },
+            "5+": {
+                "prime": 0.0450,
+                "core": 0.0500,
+                "stable": 0.0550,
+                "transitional": 0.0600,
+                "distressed": 0.0675,
+            },
+            "mixed_use": {
+                "prime": 0.0500,
+                "core": 0.0550,
+                "stable": 0.0600,
+                "transitional": 0.0650,
+                "distressed": 0.0725,
             },
             "retail": {
-                "prime": 0.045,
-                "core": 0.050,
-                "stable": 0.0525,
-                "transitional": 0.055,
-                "distressed": 0.060,
+                "prime": 0.0525,
+                "core": 0.0575,
+                "stable": 0.0625,
+                "transitional": 0.0675,
+                "distressed": 0.0750,
             },
             "office": {
-                "prime": 0.050,
-                "core": 0.055,
-                "stable": 0.060,
-                "transitional": 0.065,
-                "distressed": 0.070,
+                "prime": 0.0650,
+                "core": 0.0725,
+                "stable": 0.0800,
+                "transitional": 0.0900,
+                "distressed": 0.1000,
             },
             "industrial": {
-                "prime": 0.040,
-                "core": 0.045,
-                "stable": 0.0475,
-                "transitional": 0.050,
-                "distressed": 0.055,
+                "prime": 0.0475,
+                "core": 0.0525,
+                "stable": 0.0550,
+                "transitional": 0.0600,
+                "distressed": 0.0650,
             },
             "land": {
                 "prime": 0.020,  # often valued on residual basis, not simple cap
@@ -167,8 +172,12 @@ class CapRateModel:
             return -0.0005  # -5 bps
         elif rs < 60:
             return 0.0000   # flat
-        elif rs < 80:
+        elif rs < 70:
             return 0.0020   # +20 bps
+        elif rs < 80:
+            return 0.0040   # +40 bps
+        elif rs < 90:
+            return 0.0060   # +60 bps
         else:
             return 0.0075   # +75 bps
 
@@ -230,5 +239,6 @@ class CapRateModel:
             "risk_adjustment": risk_adj,
             "rent_control_adjustment": rc_adj,
             "final_cap_rate": final,
-            "notes": "Cap rates are heuristic and must be benchmarked against real LA market comps."
+            "calibration_as_of": "2026-Q2",
+            "notes": "Grid calibrated to Q2 2026 LA broker/CoStar survey midpoints; benchmark against closed comps.",
         }

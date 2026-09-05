@@ -1,0 +1,23 @@
+{
+  "subject": {
+    "address_full": "1234 W 41st Pl, Los Angeles, CA 90037",
+    "city": "Los Angeles",
+    "price": 1450000,
+    "beds": 8, "baths": 4, "sqft": 3600, "lot_size": 6500,
+    "year_built": 1962,
+    "property_type": "2-4", "num_units": 4,
+    "zone": "RD1.5-1", "stories": 2, "wood_frame": true, "tuck_under_parking": true,
+    "unit_rents": [2400, 2400, 2400, 2400],
+    "current_rents": [1650, 1700, 2300, 2400]
+  },
+  "financing": { "interest_rate": 0.0725, "amort_years": 30, "min_dscr": 1.20, "max_ltv": 0.75 },
+  "jurisdiction": { "submarket_class": "transitional", "risk_score": 55 },
+  "sales_comps": [
+    { "price": 1380000, "sqft": 3400, "num_units": 4, "distance_miles": 0.4, "property_type": "2-4" },
+    { "price": 1520000, "sqft": 3900, "num_units": 4, "distance_miles": 0.7, "property_type": "2-4" },
+    { "price": 1295000, "sqft": 3300, "num_units": 4, "distance_miles": 1.1, "property_type": "2-4" }
+  ],
+  "house_hack": { "loan_program": "fha", "interest_rate": 0.065, "current_rent_paid": 2600 },
+  "exit": { "exit_price": 5600000 },
+  "report_options": { "generate_html": true }
+}

@@ -1,233 +1,78 @@
-# 🏢 Real Estate Appraiser Engine
-
-_A modular, investment-grade automated valuation engine for income-producing real estate._
-
-This repository contains a **Python-based appraisal engine** that ingests listing URLs and supporting data, then produces a structured, multi-approach valuation for residential and small commercial properties.
-
-The engine is designed from an **investment / underwriting perspective** rather than a homeowner perspective. It focuses on:
-
-- Income-producing potential  
-- DSCR loan sizing  
-- Cap rate alignment  
-- Sales comparison to local market  
-- Rent control and jurisdiction risk  
-- Narrative-grade reporting and export
-
----
-
-## 🎯 Key Capabilities
-
-### 1. Multi-Source Listing Parsing
-
-The engine integrates with multiple major listing platforms via lightweight parsers:
-
-- **Zillow**
-- **Redfin**
-- **Realtor.com**
-- **Homes.com**
-- **Century21.com**
-- **LoopNet** (for small commercial / mixed-use)
-- **Apartments.com** (for rent comps)
-
-Each parser normalizes basic listing attributes into a common `listing_core` structure (price, beds, baths, square footage, lot size, year built, etc.).
-
----
-
-### 2. Integrated Appraisal Approaches
-
-The engine orchestrates several traditional valuation approaches.
-
-#### Income Approach (NOI / Investment View)
-
-- Converts rent comps into a **market rent estimate**
-- Builds **Gross Potential Income (GPI)** and **Effective Gross Income (EGI)**
-- Applies **expense ratio** and expense assumptions
-- Produces **NOI (current)** and optional **stabilized NOI**
-
-This is handled by the `IncomeApproach` model, which can be tuned for:
-
-- Unit count and mix  
-- Market vacancy rates  
-- Operating expense ratios  
-- Reserve estimates  
-
----
-
-#### Sales Comparison Approach
-
-When you provide a list of sales comparables, the `SalesCompModel`:
-
-- Normalizes comp data (price, square footage, distance, etc.)
-- Derives **price-per-square-foot (PPSF)** statistics  
-- Filters or downweights outliers  
-- Produces a **comp-derived value range / central estimate**  
-- Exposes comp statistics for downstream logic (e.g., confidence scoring)
-
----
-
-#### Cap Rate Model
-
-The `CapRateModel` uses:
-
-- Property type (SFR, 2–4 unit, 5+ unit, mixed-use, retail, office, industrial)
-- Submarket classification (prime / core / stable / transitional / distressed)
-- Optional risk score and rent control flags  
-
-to produce:
-
-- A **base cap rate**  
-- Risk and rent-control adjustments  
-- A **final reconciled cap rate** used in valuation and pricing checks.
-
----
-
-#### DSCR Loan Model
-
-The `DSCRLoanModel` sizes debt against:
-
-- Annual NOI  
-- Target minimum DSCR (e.g., 1.20x)  
-- Maximum LTV (e.g., 75%)  
-- Interest rate and amortization term  
-
-It produces:
-
-- Maximum supported **loan amount**  
-- Maximum supported **purchase price** (from a lender’s perspective)  
-- A true/false flag for **meeting the DSCR threshold**  
-
----
-
-### 3. Market Confidence Score
-
-Beyond just “what is it worth?”, the engine answers:
-
-> “How much confidence should we have in this valuation, based on available data?”
-
-The **Market Confidence module** considers:
-
-- The number of valid comparables
-- Average distance of comps from the subject
-- Spread between low/median/high PPSF
-- Comp variance relative to a central trend
-
-It outputs:
-
-- A **score** (1.0–5.0)  
-- A **level** – `high`, `medium`, or `low`  
-- Supporting statistics (comp count, average distance, PPSF spread, etc.)
-
-This score is used to lightly adjust the final BUY/WATCH/PASS rating, without overpowering the core underwriting metrics.
-
----
-
-### 4. Recommendation Engine (BUY / WATCH / PASS)
-
-The `RecommendationEngine` fuses:
-
-- Cap rate strength  
-- DSCR compliance and loan sizing  
-- Cash-on-cash return (if provided)  
-- Sales comparison performance  
-- Market confidence level  
-- Risk score and jurisdictional flags  
-
-into a single:
-
-- **Final recommendation**: `"BUY"`, `"WATCH"`, or `"PASS"`  
-- **Final score** and **base score**  
-- Component scores for transparency
-
-This gives you a fast institutional-style signal while still surfacing the underlying drivers.
-
----
-
-### 5. Narrative Builder
-
-The `NarrativeBuilder` converts all quantitative outputs into a **human-readable summary** suitable for:
-
-- Investment memos  
-- Lender packages  
-- Internal underwriting notes  
-- Broker opinion-of-value supplements  
-
-It produces:
-
-- A `full_text` narrative (multi-paragraph)  
-- Breakdowns by section:
-
-  - Subject property overview  
-  - Income and NOI summary  
-  - Cap rate reasoning  
-  - Valuation (as-is and stabilized)  
-  - Sales comparison synthesis  
-  - Market confidence explanation  
-  - Financing / DSCR perspective  
-  - Final recommendation narrative  
-
-This dramatically shortens the time between analysis and communication.
-
----
-
-### 6. HTML & PDF Report Generation
-
-The `report_generator` module can take the full appraisal result and generate:
-
-- A **styled HTML report**, with sections and tables  
-- A **PDF report** (if `WeasyPrint` or a compatible backend is installed)
-
-The report includes:
-
-- Header with property address and listing price  
-- Subject property table (beds, baths, square footage, lot size, year built)  
-- Income and NOI table  
-- Cap rate and valuation table  
-- Sales comparison and Market Confidence summary  
-- Financing and DSCR table  
-- Full narrative section  
-
-This is ideal for:
-
-- Exporting to investors  
-- Attaching to emails  
-- Persisting in your internal deal database  
-
----
-
-## 🧱 Architecture & Module Overview
-
-The engine is structured to keep parsers, tools, models, and presentation cleanly separated.
-
-```text
-real-estate-appraiser/
-│
-├── engine/
-│   └── appraiser_engine.py         # Orchestration / coordinator
-│
-├── services/                       # External data ingestion (scraping / parsing)
-│   ├── zillow_parser.py
-│   ├── redfin_parser.py
-│   ├── realtor_parser.py
-│   ├── homesdotcom_parser.py
-│   ├── century21_parser.py
-│   ├── loopnet_parser.py
-│   └── apartments_parser.py
-│
-├── tools/                          # Local utilities and enriched context
-│   ├── address_normalizer.py       # Standardizes addresses (street, city, ZIP)
-│   ├── apn_lookup.py               # APN + assessor data integration
-│   ├── zoning_lookup.py            # Zoning + overlays integration
-│   └── rental_comp_aggregator.py   # Aggregates and summarizes rent comps
-│
-├── models/                         # Core underwriting & valuation logic
-│   ├── income_approach.py          # NOI modeling
-│   ├── cap_rate_model.py           # Cap rate determination
-│   ├── dscr_loan_model.py          # DSCR and loan sizing
-│   ├── sales_comp_model.py         # Sales comparison normalization & stats
-│   ├── recommendation_engine.py    # BUY/WATCH/PASS decision & scoring
-│   └── narrative_builder.py        # Narrative synthesis
-│
-├── reports/
-│   └── report_generator.py         # HTML/PDF report output
-│
-└── README.md
+# LA Appraisal Engine
+
+*A Los Angeles-specific underwriting engine for small residential and multifamily property, with a consumer-friendly API.*
+
+Generic deal calculators treat LA like any other metro. This engine knows that a 1962 fourplex in LA City is under the RSO, that Prop 13 resets the tax bill at closing, that a $5.5M exit pays Measure ULA on the whole price, that a pre-1978 building with tuck-under parking probably owes a soft-story retrofit, and that an R1 lot is SB 9 eligible. It fuses those rules with an explicit LA expense stack, DSCR loan sizing, sales comps, and FHA house-hack lender tests.
+
+Strategy, market analysis, and the phased roadmap live in [`docs/STRATEGY_BLUEPRINT.md`](docs/STRATEGY_BLUEPRINT.md).
+
+## Quick start
+
+```bash
+pip install -r requirements-dev.txt
+pytest -q
+uvicorn api.main:app --reload      # docs at http://127.0.0.1:8000/docs
+```
+
+Run the bundled fourplex example:
+
+```bash
+python -c "
+import json; from engine.appraiser_engine import AppraiserEngine
+cfg = json.load(open('examples/example_fourplex_structured.json'))
+out = AppraiserEngine().run_full_appraisal(cfg)
+print(out['narrative']['full_text'])"
+```
+
+Docker:
+
+```bash
+docker build -t la-appraisal-engine .
+docker run -p 8000:8000 la-appraisal-engine
+```
+
+## API
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /appraise` | Full underwriting from a structured `subject` (address, price, units, rents, year built, zone). Returns income value, DSCR sizing, regulatory findings, optional sales comps, optional house-hack view, narrative, and BUY / WATCH / PASS. |
+| `POST /appraise/report.html` | Same, rendered as a printable HTML report. |
+| `POST /house-hack` | Owner-occupant 1 to 4 unit math: FHA 3.5% down, 75% rent credit, self-sufficiency test, net monthly housing cost. |
+| `POST /regulatory` | The LA Regulatory Stack on its own: RSO / AB 1482 regime, ULA transfer tax, Prop 13 tax, soft-story exposure, SB 9 and ADU upside, fire-zone insurance. |
+| `GET /health` | Liveness plus the rules-engine `as_of` date. |
+
+Minimal request:
+
+```json
+{
+  "subject": {
+    "address_full": "1234 W 41st Pl, Los Angeles, CA 90037",
+    "city": "Los Angeles", "price": 1450000, "year_built": 1962,
+    "property_type": "2-4", "num_units": 4, "zone": "RD1.5-1",
+    "unit_rents": [2400, 2400, 2400, 2400], "current_rents": [1650, 1700, 2300, 2400]
+  },
+  "house_hack": { "loan_program": "fha", "interest_rate": 0.065 }
+}
+```
+
+Listing URLs (`primary_url`) are accepted as a best-effort convenience only. The major portals block automated fetches; when a fetch fails the engine says so in `warnings` and continues from the structured subject.
+
+## Layout
+
+```
+core/            Pure, cited, dated LA rules: la_regulatory.py, house_hack.py
+engine/          Orchestration (appraiser_engine.py)
+models/          Income approach (LA expense stack), cap rate grid (Q2 2026), DSCR, sales comps,
+                 recommendation, narrative, value-add, income scenarios, risk scoring
+reports/         HTML / PDF report generator
+api/             FastAPI app and pydantic schemas
+tools/           Address normaliser, APN lookup, zoning interpreter, rent-comp aggregator
+services/        Optional listing parsers (best-effort), property tax estimator
+data_sources/    Geocoder, HUD FMR client (Phase 1 replaces with licensed and public-GIS adapters)
+tests/           pytest suite (regulatory rules, house-hack, engine end-to-end, API)
+docs/            Strategy blueprint and roadmap
+```
+
+## Disclaimer
+
+Automated underwriting output. Not an appraisal under USPAP and not legal, tax, or investment advice. Every regulatory finding carries its statutory basis and must be verified with ZIMAS, LAHD, and the LA County Assessor for a specific parcel.
